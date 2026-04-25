@@ -67,14 +67,36 @@
               <option value="cold_water">Cold water</option>
             </select>
           </div>
-          <div class="mt-4">
-            <canvas id="chart" height="110"></canvas>
+          <div class="mt-4 h-72">
+            <canvas id="chart" style="height: 100%; width: 100%"></canvas>
           </div>
         </div>
 
         <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
           <div class="text-sm font-semibold">Recent settlements</div>
           <div id="pays" class="mt-3 flex flex-col gap-3"></div>
+        </div>
+      </div>
+
+      <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Carbon credits position (tCO2e)</div>
+          <div id="carbon-tonnes" class="mt-1 text-3xl font-semibold tracking-tight">—</div>
+          <div class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Debt (sats): <span id="carbon-debt">—</span></div>
+          <div class="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Price (EUR/t): <span id="carbon-price">—</span></div>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
+          <div class="flex items-center justify-between">
+            <div class="text-sm font-semibold">Carbon price (simulated)</div>
+            <div class="text-xs text-zinc-500 dark:text-zinc-400">automatic buy/sell based on savings</div>
+          </div>
+          <div class="mt-4 h-56">
+            <canvas id="carbonChart" style="height: 100%; width: 100%"></canvas>
+          </div>
+          <div class="mt-4">
+            <div class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Recent carbon trades</div>
+            <div id="carbon-trades" class="mt-3 grid gap-2"></div>
+          </div>
         </div>
       </div>
     </main>
@@ -102,6 +124,10 @@
       const elWater = document.getElementById("tot-water");
       const pays = document.getElementById("pays");
       const rt = document.getElementById("rt");
+      const elCTonnes = document.getElementById("carbon-tonnes");
+      const elCDebt = document.getElementById("carbon-debt");
+      const elCPrice = document.getElementById("carbon-price");
+      const elCTrades = document.getElementById("carbon-trades");
 
       const ctx = document.getElementById("chart").getContext("2d");
       const chart = new Chart(ctx, {
@@ -109,6 +135,19 @@
         data: { labels: [], datasets: [{ label: "EUR per unit", data: [], borderWidth: 2, pointRadius: 0 }] },
         options: {
           responsive: true,
+          maintainAspectRatio: false,
+          scales: { x: { display: false } },
+          plugins: { legend: { display: false } }
+        }
+      });
+
+      const carbonCtx = document.getElementById("carbonChart").getContext("2d");
+      const carbonChart = new Chart(carbonCtx, {
+        type: "line",
+        data: { labels: [], datasets: [{ label: "EUR/t", data: [], borderWidth: 2, pointRadius: 0 }] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
           scales: { x: { display: false } },
           plugins: { legend: { display: false } }
         }
@@ -172,11 +211,52 @@
         chart.update();
       }
 
+      async function refreshCarbon() {
+        const [pf, px, tr] = await Promise.all([api("/v1/me/carbon/portfolio"), api("/v1/me/carbon/price"), api("/v1/me/carbon/trades?limit=8")]);
+        const pos = pf.position || { tonnes: 0, debtSats: 0 };
+        elCTonnes.textContent = Number(pos.tonnes || 0).toFixed(3);
+        elCDebt.textContent = String(Number(pos.debtSats || 0));
+        elCPrice.textContent = Number(pf.priceEurPerTonne || 0).toFixed(2);
+
+        const pts = px.points || [];
+        carbonChart.data.labels = pts.map((p) => p.ts);
+        carbonChart.data.datasets[0].data = pts.map((p) => p.priceEurPerTonne);
+        carbonChart.update();
+
+        clear(elCTrades);
+        const trades = (tr.trades || []).slice(-8).reverse();
+        if (trades.length === 0) {
+          const d = document.createElement("div");
+          d.className = "text-xs text-zinc-500 dark:text-zinc-400";
+          d.textContent = "No carbon trades yet.";
+          elCTrades.appendChild(d);
+        } else {
+          for (const t of trades) {
+            const row = document.createElement("div");
+            row.className = "flex items-center justify-between rounded-xl border border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800";
+            row.innerHTML =
+              "<div class='font-medium'>" +
+              t.side.toUpperCase() +
+              " " +
+              Number(t.tonnes).toFixed(3) +
+              "t</div>" +
+              "<div class='text-zinc-500 dark:text-zinc-400'>" +
+              Number(t.notionalSats || 0) +
+              " sats @ " +
+              Number(t.priceEurPerTonne).toFixed(2) +
+              " EUR/t</div>";
+            elCTrades.appendChild(row);
+          }
+        }
+      }
+
       rt.addEventListener("change", refreshChart);
       refreshSummary().catch(() => {});
       refreshChart().catch(() => {});
+      refreshCarbon().catch(() => {});
       setInterval(() => refreshSummary().catch(() => {}), 1500);
       setInterval(() => refreshChart().catch(() => {}), 4000);
+      setInterval(() => refreshCarbon().catch(() => {}), 2500);
     </script>
   </body>
 </html>

@@ -89,6 +89,32 @@ class TariffPoint:
 
 
 @dataclass
+class CarbonPricePoint:
+    ts: str
+    priceEurPerTonne: float
+
+
+@dataclass
+class CarbonTrade:
+    id: str
+    ts: str
+    userId: int
+    side: Literal["buy", "sell"]
+    tonnes: float
+    priceEurPerTonne: float  # display/reference
+    notionalSats: int        # settlement currency (Bitcoin)
+    reason: str
+
+
+@dataclass
+class CarbonPosition:
+    userId: int
+    tonnes: float = 0.0
+    debtSats: int = 0
+    updatedAt: str = ""
+
+
+@dataclass
 class Store:
     meters: List[Meter] = field(default_factory=list)
     tariffs: List[Tariff] = field(default_factory=list)
@@ -97,6 +123,9 @@ class Store:
     ledger: List[LedgerEntry] = field(default_factory=list)
     payments: List[Payment] = field(default_factory=list)
     tariffHistory: List[TariffPoint] = field(default_factory=list)
+    carbonPriceHistory: List[CarbonPricePoint] = field(default_factory=list)
+    carbonTrades: List[CarbonTrade] = field(default_factory=list)
+    carbonPositions: Dict[int, CarbonPosition] = field(default_factory=dict)
     unsettledEurByProviderId: Dict[str, float] = field(default_factory=dict)
 
     def as_json(self):
@@ -127,6 +156,9 @@ def default_store() -> Store:
     s = Store(meters=meters, tariffs=tariffs, providers=providers)
     for t in tariffs:
         s.tariffHistory.append(TariffPoint(ts=t.updatedAt, resourceType=t.resourceType, pricePerUnit=t.pricePerUnit))
+    # Start with a simple carbon price (EUR / tonne CO2e)
+    s.carbonPriceHistory.append(CarbonPricePoint(ts=now_iso(), priceEurPerTonne=80.0))
+    s.carbonPositions[1] = CarbonPosition(userId=1, tonnes=0.0, debtSats=0, updatedAt=now_iso())
     s.unsettledEurByProviderId[provider_id] = 0.0
     return s
 

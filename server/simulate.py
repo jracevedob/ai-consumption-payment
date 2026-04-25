@@ -4,6 +4,7 @@ import asyncio
 import random
 from typing import Callable, Optional
 
+from .carbon_agent import carbon_agent_step, maybe_update_carbon_price
 from .store import ConsumptionEvent, Store, TariffPoint, now_iso, nid
 
 
@@ -24,6 +25,12 @@ async def simulation_loop(
     tick = 0
     while not stop_event.is_set():
         tick += 1
+        maybe_update_carbon_price(store, tick)
+
+        # Baseline vs actual: keep baseline slightly above typical actual to create "savings" some of the time.
+        baseline_cost_eur = 0.20
+        actual_cost_eur = 0.0
+
         for m in store.meters:
             if m.resourceType == "electricity":
                 delta = _rand(0.01, 0.08)
@@ -44,6 +51,14 @@ async def simulation_loop(
                     unit=m.unit,
                 )
             )
+            # Roughly convert deltas to a cost estimate for the carbon agent decision.
+            # This is a demo heuristic; the deterministic tariff engine remains source of truth in the ledger.
+            if m.resourceType == "electricity":
+                actual_cost_eur += delta * 0.35
+            elif m.resourceType == "gas":
+                actual_cost_eur += delta * 0.12
+            else:
+                actual_cost_eur += delta * 0.002
 
         # Occasionally vary tariffs to demo "price variation" charts.
         # Keep changes small so UI remains stable.
@@ -53,6 +68,15 @@ async def simulation_loop(
                 t.pricePerUnit = float(max(0.000001, t.pricePerUnit * factor))
                 t.updatedAt = now_iso()
                 store.tariffHistory.append(TariffPoint(ts=t.updatedAt, resourceType=t.resourceType, pricePerUnit=t.pricePerUnit))
+
+        # Carbon agent decision (buy/sell credits + debt) based on savings vs baseline.
+        carbon_agent_step(
+            store,
+            user_id=1,
+            actual_cost_eur=float(actual_cost_eur),
+            baseline_cost_eur=float(baseline_cost_eur),
+            btc_eur_rate=60000.0,
+        )
 
         # Health mostly healthy
         r = random.random()

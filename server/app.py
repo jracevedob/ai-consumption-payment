@@ -15,6 +15,7 @@ from starlette.requests import Request
 from .auth import CurrentUser, clear_session_cookie, hash_password, new_salt, new_session_id, session_expiry_iso, set_session_cookie
 from .db import connect, create_session, create_user, get_user_by_email, migrate
 from .lightning_mock import MockLightning
+from .carbon_agent import current_carbon_price
 from .settlement import wire_tick
 from .simulate import simulation_loop
 from .store import ConsumptionEvent, Store, default_store, now_iso
@@ -208,6 +209,32 @@ async def my_tariff_history(resourceType: str, user=CurrentUser):
     rt = resourceType
     points = [p for p in store.tariffHistory if p.resourceType == rt][-500:]
     return {"resourceType": rt, "points": points}
+
+
+@app.get("/v1/me/carbon/portfolio")
+async def my_carbon_portfolio(user=CurrentUser):
+    uid = int(user["id"])
+    pos = store.carbonPositions.get(uid)
+    if pos is None:
+        return {
+            "position": {"userId": uid, "tonnes": 0.0, "debtSats": 0, "updatedAt": now_iso()},
+            "priceEurPerTonne": current_carbon_price(store),
+            "btcEurRate": BTC_EUR_RATE,
+        }
+    return {"position": pos, "priceEurPerTonne": current_carbon_price(store), "btcEurRate": BTC_EUR_RATE}
+
+
+@app.get("/v1/me/carbon/trades")
+async def my_carbon_trades(limit: int = 50, user=CurrentUser):
+    uid = int(user["id"])
+    trades = [t for t in store.carbonTrades if t.userId == uid][-limit:]
+    return {"trades": trades}
+
+
+@app.get("/v1/me/carbon/price")
+async def my_carbon_price(limit: int = 200, user=CurrentUser):
+    pts = store.carbonPriceHistory[-limit:]
+    return {"points": pts}
 
 
 @app.post("/v1/ingest")
