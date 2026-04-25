@@ -21,5 +21,6 @@ async def test_simulation_loop_appends_consumption_and_updates_health():
     await simulation_loop(store=s, provider_id=pid, tick_ms=10, on_tick=None, stop_event=stop)
 
     assert len(s.consumption) >= len(s.meters)
+    assert all(getattr(e, "userId", None) == 1 for e in s.consumption[-len(s.meters) :])
     assert s.providers[0].health in ("healthy", "degraded", "down", "unknown")
 

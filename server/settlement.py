@@ -34,6 +34,7 @@ def apply_latest_consumption(store: Store, provider_id: str, btc_eur_rate: float
             LedgerEntry(
                 id=nid(),
                 ts=e.ts,
+                userId=e.userId,
                 meterId=e.meterId,
                 resourceType=m.resourceType,
                 amountEur=cost_eur,
@@ -48,6 +49,7 @@ def apply_latest_consumption(store: Store, provider_id: str, btc_eur_rate: float
 async def maybe_settle(
     store: Store,
     provider_id: str,
+    user_id: int,
     btc_eur_rate: float,
     threshold_eur: float,
     lightning: MockLightning,
@@ -67,6 +69,7 @@ async def maybe_settle(
         p = Payment(
             id=nid(),
             ts=ts,
+            userId=user_id,
             providerId=provider_id,
             amountSats=amount_sats,
             feeSats=res.feeSats,
@@ -81,6 +84,7 @@ async def maybe_settle(
                 LedgerEntry(
                     id=nid(),
                     ts=ts,
+                    userId=user_id,
                     meterId="system",
                     resourceType="electricity",
                     amountEur=0.0,
@@ -95,6 +99,7 @@ async def maybe_settle(
     p = Payment(
         id=nid(),
         ts=ts,
+        userId=user_id,
         providerId=provider_id,
         amountSats=amount_sats,
         feeSats=0,
@@ -113,7 +118,7 @@ def wire_tick(store: Store, provider_id: str, btc_eur_rate: float, threshold_eur
 
     def _on_tick():
         apply_latest_consumption(store, provider_id, btc_eur_rate)
-        asyncio.create_task(maybe_settle(store, provider_id, btc_eur_rate, threshold_eur, lightning))
+        asyncio.create_task(maybe_settle(store, provider_id, 1, btc_eur_rate, threshold_eur, lightning))
 
     return _on_tick
 

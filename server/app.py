@@ -6,12 +6,14 @@ from pathlib import Path
 from typing import Any, Dict
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
+from .auth import CurrentUser, clear_session_cookie, hash_password, new_salt, new_session_id, session_expiry_iso, set_session_cookie
+from .db import connect, create_session, create_user, get_user_by_email, migrate
 from .lightning_mock import MockLightning
 from .settlement import wire_tick
 from .simulate import simulation_loop
@@ -39,6 +41,8 @@ lightning = MockLightning()
 provider_id = store.providers[0].id
 
 stop_event = asyncio.Event()
+con = connect()
+migrate(con)
 
 
 @app.on_event("startup")
@@ -71,6 +75,16 @@ async def _shutdown():
 @app.get("/", response_class=HTMLResponse)
 async def home(req: Request):
     return templates.TemplateResponse("index.html", {"request": req})
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(req: Request):
+    return templates.TemplateResponse("login.html", {"request": req})
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard_page(req: Request, user=CurrentUser):
+    return templates.TemplateResponse("dashboard.html", {"request": req, "user": user})
 
 
 @app.get("/health")
@@ -128,6 +142,74 @@ async def payments(limit: int = 200):
     return store.payments[-limit:]
 
 
+@app.get("/v1/me")
+async def me(user=CurrentUser):
+    return user
+
+
+@app.post("/auth/register")
+async def register(payload: Dict[str, Any], response: Response):
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    if "@" not in email or len(password) < 6:
+        raise HTTPException(status_code=400, detail="invalid email or password too short")
+    if get_user_by_email(con, email) is not None:
+        raise HTTPException(status_code=409, detail="email already exists")
+
+    salt = new_salt()
+    ph = hash_password(password, salt)
+    user_id = create_user(con, email=email, password_hash=ph, salt=salt, created_at=now_iso())
+
+    sid = new_session_id()
+    create_session(con, session_id=sid, user_id=user_id, expires_at=session_expiry_iso(), created_at=now_iso())
+    set_session_cookie(response, sid)
+    return {"ok": True, "user": {"id": user_id, "email": email}}
+
+
+@app.post("/auth/login")
+async def login(payload: Dict[str, Any], response: Response):
+    email = str(payload.get("email", "")).strip().lower()
+    password = str(payload.get("password", ""))
+    u = get_user_by_email(con, email)
+    if u is None:
+        raise HTTPException(status_code=401, detail="invalid credentials")
+    ph = hash_password(password, str(u["salt"]))
+    if ph != str(u["password_hash"]):
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
+    sid = new_session_id()
+    create_session(con, session_id=sid, user_id=int(u["id"]), expires_at=session_expiry_iso(), created_at=now_iso())
+    set_session_cookie(response, sid)
+    return {"ok": True}
+
+
+@app.post("/auth/logout")
+async def logout(response: Response):
+    clear_session_cookie(response)
+    return {"ok": True}
+
+
+@app.get("/v1/me/summary")
+async def my_summary(user=CurrentUser):
+    uid = int(user["id"])
+    # Total consumption cost by resource in the ledger
+    totals: Dict[str, float] = {}
+    for le in store.ledger:
+        if getattr(le, "userId", None) != uid:
+            continue
+        totals[le.resourceType] = float(totals.get(le.resourceType, 0.0) + (le.amountEur or 0.0))
+
+    recent_payments = [p for p in store.payments if getattr(p, "userId", None) == uid][-20:]
+    return {"totalsEurByResource": totals, "recentPayments": recent_payments}
+
+
+@app.get("/v1/me/tariffs/history")
+async def my_tariff_history(resourceType: str, user=CurrentUser):
+    rt = resourceType
+    points = [p for p in store.tariffHistory if p.resourceType == rt][-500:]
+    return {"resourceType": rt, "points": points}
+
+
 @app.post("/v1/ingest")
 async def ingest(payload: Dict[str, Any]):
     meter_id = payload.get("meterId")
@@ -140,7 +222,7 @@ async def ingest(payload: Dict[str, Any]):
     if not isinstance(delta, (int, float)):
         raise HTTPException(status_code=400, detail="delta must be number")
 
-    ev = ConsumptionEvent(id="manual", meterId=meter_id, ts=ts, delta=float(delta), unit=m.unit)
+    ev = ConsumptionEvent(id="manual", userId=1, meterId=meter_id, ts=ts, delta=float(delta), unit=m.unit)
     store.consumption.append(ev)
     return {"ok": True, "event": ev}
 

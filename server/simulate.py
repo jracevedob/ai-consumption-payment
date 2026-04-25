@@ -4,7 +4,7 @@ import asyncio
 import random
 from typing import Callable, Optional
 
-from .store import ConsumptionEvent, Store, now_iso, nid
+from .store import ConsumptionEvent, Store, TariffPoint, now_iso, nid
 
 
 def _rand(a: float, b: float) -> float:
@@ -21,7 +21,9 @@ async def simulation_loop(
     if stop_event is None:
         stop_event = asyncio.Event()
 
+    tick = 0
     while not stop_event.is_set():
+        tick += 1
         for m in store.meters:
             if m.resourceType == "electricity":
                 delta = _rand(0.01, 0.08)
@@ -35,12 +37,22 @@ async def simulation_loop(
             store.consumption.append(
                 ConsumptionEvent(
                     id=nid(),
+                    userId=1,
                     meterId=m.id,
                     ts=now_iso(),
                     delta=float(delta),
                     unit=m.unit,
                 )
             )
+
+        # Occasionally vary tariffs to demo "price variation" charts.
+        # Keep changes small so UI remains stable.
+        if tick % 20 == 0:
+            for t in store.tariffs:
+                factor = 1.0 + random.uniform(-0.01, 0.01)
+                t.pricePerUnit = float(max(0.000001, t.pricePerUnit * factor))
+                t.updatedAt = now_iso()
+                store.tariffHistory.append(TariffPoint(ts=t.updatedAt, resourceType=t.resourceType, pricePerUnit=t.pricePerUnit))
 
         # Health mostly healthy
         r = random.random()

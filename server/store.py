@@ -48,6 +48,7 @@ class Provider:
 @dataclass
 class ConsumptionEvent:
     id: str
+    userId: int
     meterId: str
     ts: str
     delta: float
@@ -58,6 +59,7 @@ class ConsumptionEvent:
 class LedgerEntry:
     id: str
     ts: str
+    userId: int
     meterId: str
     resourceType: ResourceType
     amountEur: float
@@ -69,6 +71,7 @@ class LedgerEntry:
 class Payment:
     id: str
     ts: str
+    userId: int
     providerId: str
     amountSats: int
     feeSats: int
@@ -79,6 +82,13 @@ class Payment:
 
 
 @dataclass
+class TariffPoint:
+    ts: str
+    resourceType: ResourceType
+    pricePerUnit: float
+
+
+@dataclass
 class Store:
     meters: List[Meter] = field(default_factory=list)
     tariffs: List[Tariff] = field(default_factory=list)
@@ -86,6 +96,7 @@ class Store:
     consumption: List[ConsumptionEvent] = field(default_factory=list)
     ledger: List[LedgerEntry] = field(default_factory=list)
     payments: List[Payment] = field(default_factory=list)
+    tariffHistory: List[TariffPoint] = field(default_factory=list)
     unsettledEurByProviderId: Dict[str, float] = field(default_factory=dict)
 
     def as_json(self):
@@ -114,6 +125,8 @@ def default_store() -> Store:
     ]
 
     s = Store(meters=meters, tariffs=tariffs, providers=providers)
+    for t in tariffs:
+        s.tariffHistory.append(TariffPoint(ts=t.updatedAt, resourceType=t.resourceType, pricePerUnit=t.pricePerUnit))
     s.unsettledEurByProviderId[provider_id] = 0.0
     return s
 

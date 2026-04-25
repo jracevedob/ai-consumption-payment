@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Login · Consumption Index</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: "class" };
+      (function () {
+        try {
+          const t = localStorage.getItem("theme");
+          if (t === "dark") document.documentElement.classList.add("dark");
+        } catch {}
+      })();
+    </script>
+  </head>
+  <body class="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50">
+    <div class="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <div class="mx-auto flex h-14 max-w-xl items-center justify-between px-4">
+        <a class="flex items-center gap-2" href="/">
+          <div class="h-8 w-8 rounded-lg bg-zinc-950 dark:bg-zinc-50"></div>
+          <div class="text-sm font-semibold">Consumption Index</div>
+        </a>
+        <a class="text-xs text-zinc-600 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-zinc-50" href="/">Home</a>
+      </div>
+    </div>
+
+    <main class="mx-auto max-w-xl px-4 py-10">
+      <div class="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div class="text-lg font-semibold">Sign in</div>
+        <div class="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Log in to track your live consumption and payments.</div>
+
+        <div class="mt-6 grid gap-3">
+          <label class="grid gap-1">
+            <span class="text-xs font-medium text-zinc-600 dark:text-zinc-300">Email</span>
+            <input
+              id="email"
+              class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950"
+              placeholder="you@example.com"
+            />
+          </label>
+          <label class="grid gap-1">
+            <span class="text-xs font-medium text-zinc-600 dark:text-zinc-300">Password</span>
+            <input
+              id="password"
+              type="password"
+              class="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-800 dark:bg-zinc-950"
+              placeholder="••••••"
+            />
+          </label>
+          <div class="mt-2 flex gap-2">
+            <button
+              id="btn-login"
+              class="rounded-xl bg-zinc-950 px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-900 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              type="button"
+            >
+              Log in
+            </button>
+            <button
+              id="btn-register"
+              class="rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+              type="button"
+            >
+              Create account
+            </button>
+          </div>
+          <div id="msg" class="text-sm text-rose-600"></div>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      async function post(path, body) {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          credentials: "include"
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "request failed");
+        return data;
+      }
+
+      const msg = document.getElementById("msg");
+      const email = document.getElementById("email");
+      const password = document.getElementById("password");
+
+      document.getElementById("btn-login").addEventListener("click", async () => {
+        msg.textContent = "";
+        try {
+          await post("/auth/login", { email: email.value, password: password.value });
+          location.href = "/dashboard";
+        } catch (e) {
+          msg.textContent = e.message || String(e);
+        }
+      });
+
+      document.getElementById("btn-register").addEventListener("click", async () => {
+        msg.textContent = "";
+        try {
+          await post("/auth/register", { email: email.value, password: password.value });
+          location.href = "/dashboard";
+        } catch (e) {
+          msg.textContent = e.message || String(e);
+        }
+      });
+    </script>
+  </body>
+</html>
+
