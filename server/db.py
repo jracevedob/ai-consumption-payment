@@ -40,7 +40,85 @@ def migrate(con: sqlite3.Connection) -> None:
         );
         """
     )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_profiles (
+          user_id INTEGER PRIMARY KEY,
+          warmmiete_eur REAL NOT NULL,
+          rent_share REAL NOT NULL,
+          utilities_share REAL NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notifications (
+          id TEXT PRIMARY KEY,
+          user_id INTEGER NOT NULL,
+          ts TEXT NOT NULL,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          body TEXT NOT NULL,
+          read INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+        """
+    )
     con.commit()
+
+
+def get_user_profile(con: sqlite3.Connection, user_id: int) -> Optional[sqlite3.Row]:
+    return con.execute("SELECT * FROM user_profiles WHERE user_id = ?", (user_id,)).fetchone()
+
+
+def upsert_user_profile(
+    con: sqlite3.Connection,
+    user_id: int,
+    warmmiete_eur: float,
+    rent_share: float,
+    utilities_share: float,
+    created_at: str,
+    updated_at: str,
+) -> None:
+    con.execute(
+        """
+        INSERT INTO user_profiles(user_id, warmmiete_eur, rent_share, utilities_share, created_at, updated_at)
+        VALUES(?,?,?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          warmmiete_eur=excluded.warmmiete_eur,
+          rent_share=excluded.rent_share,
+          utilities_share=excluded.utilities_share,
+          updated_at=excluded.updated_at
+        """,
+        (user_id, warmmiete_eur, rent_share, utilities_share, created_at, updated_at),
+    )
+    con.commit()
+
+
+def create_notification(
+    con: sqlite3.Connection,
+    notif_id: str,
+    user_id: int,
+    ts: str,
+    type_: str,
+    title: str,
+    body: str,
+) -> None:
+    con.execute(
+        "INSERT INTO notifications(id, user_id, ts, type, title, body, read) VALUES(?,?,?,?,?,?,0)",
+        (notif_id, user_id, ts, type_, title, body),
+    )
+    con.commit()
+
+
+def list_notifications(con: sqlite3.Connection, user_id: int, limit: int = 50):
+    return con.execute(
+        "SELECT * FROM notifications WHERE user_id = ? ORDER BY ts DESC LIMIT ?",
+        (user_id, limit),
+    ).fetchall()
 
 
 def get_user_by_email(con: sqlite3.Connection, email: str) -> Optional[sqlite3.Row]:

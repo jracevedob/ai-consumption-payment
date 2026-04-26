@@ -53,6 +53,28 @@
         </div>
       </div>
 
+      <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Warmmiete utilities budget (this month)</div>
+            <div
+              id="budget-pill"
+              class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+            >
+              —
+            </div>
+          </div>
+          <div id="budget-surplus" class="mt-2 text-3xl font-semibold tracking-tight">—</div>
+          <div class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            prepaid (27% to-date): <span id="budget-prepaid">—</span> · actual utilities: <span id="budget-actual">—</span>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div class="text-sm font-semibold">Notifications</div>
+          <div id="notifs" class="mt-3 grid gap-2"></div>
+        </div>
+      </div>
+
       <div class="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 lg:col-span-2">
           <div class="flex items-center justify-between">
@@ -99,6 +121,21 @@
           </div>
         </div>
       </div>
+
+      <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div class="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div class="flex items-center justify-between">
+            <div class="text-xs font-medium text-zinc-500 dark:text-zinc-400">Savings vs baseline</div>
+            <div id="carbon-sd-pill" class="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+              —
+            </div>
+          </div>
+          <div id="carbon-surplus" class="mt-2 text-3xl font-semibold tracking-tight">—</div>
+          <div class="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+            baseline: <span id="carbon-baseline">—</span> · actual: <span id="carbon-actual">—</span>
+          </div>
+        </div>
+      </div>
     </main>
 
     <script>
@@ -123,11 +160,20 @@
       const elGas = document.getElementById("tot-gas");
       const elWater = document.getElementById("tot-water");
       const pays = document.getElementById("pays");
+      const elBudgetPill = document.getElementById("budget-pill");
+      const elBudgetSurplus = document.getElementById("budget-surplus");
+      const elBudgetPrepaid = document.getElementById("budget-prepaid");
+      const elBudgetActual = document.getElementById("budget-actual");
+      const elNotifs = document.getElementById("notifs");
       const rt = document.getElementById("rt");
       const elCTonnes = document.getElementById("carbon-tonnes");
       const elCDebt = document.getElementById("carbon-debt");
       const elCPrice = document.getElementById("carbon-price");
       const elCTrades = document.getElementById("carbon-trades");
+      const elSDPill = document.getElementById("carbon-sd-pill");
+      const elSurplus = document.getElementById("carbon-surplus");
+      const elBaseline = document.getElementById("carbon-baseline");
+      const elActual = document.getElementById("carbon-actual");
 
       const ctx = document.getElementById("chart").getContext("2d");
       const chart = new Chart(ctx, {
@@ -198,6 +244,20 @@
         elGas.textContent = "€" + gas.toFixed(2);
         elWater.textContent = "€" + (hw + cw).toFixed(2);
 
+        const b = s.budget;
+        if (b) {
+          const surplus = Number(b.surplusEur || 0);
+          elBudgetPill.textContent = surplus >= 0 ? "SURPLUS" : "DEFICIT";
+          elBudgetPill.className =
+            "rounded-full px-2 py-0.5 text-xs font-medium " +
+            (surplus >= 0
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200");
+          elBudgetSurplus.textContent = (surplus >= 0 ? "+" : "−") + "€" + Math.abs(surplus).toFixed(2);
+          elBudgetPrepaid.textContent = "€" + Number(b.utilitiesBudgetToDateEur || 0).toFixed(2);
+          elBudgetActual.textContent = "€" + Number(b.utilitiesActualToDateEur || 0).toFixed(2);
+        }
+
         clear(pays);
         const last = (s.recentPayments || []).slice(-8).reverse();
         if (last.length === 0) {
@@ -232,6 +292,30 @@
         }
       }
 
+      async function refreshNotifs() {
+        const data = await api("/v1/me/notifications?limit=8");
+        const items = (data.notifications || []).slice(-8);
+        clear(elNotifs);
+        if (items.length === 0) {
+          const d = document.createElement("div");
+          d.className = "text-xs text-zinc-500 dark:text-zinc-400";
+          d.textContent = "No notifications.";
+          elNotifs.appendChild(d);
+          return;
+        }
+        for (const n of items.reverse()) {
+          const row = document.createElement("div");
+          row.className = "rounded-xl border border-zinc-200 px-3 py-2 text-xs dark:border-zinc-800";
+          row.innerHTML =
+            "<div class='font-semibold'>" +
+            n.title +
+            "</div><div class='text-zinc-500 dark:text-zinc-400 mt-1'>" +
+            n.body +
+            "</div>";
+          elNotifs.appendChild(row);
+        }
+      }
+
       async function refreshChart() {
         const rtv = rt.value;
         const data = await api("/v1/me/tariffs/history?resourceType=" + encodeURIComponent(rtv));
@@ -242,11 +326,36 @@
       }
 
       async function refreshCarbon() {
-        const [pf, px, tr] = await Promise.all([api("/v1/me/carbon/portfolio"), api("/v1/me/carbon/price"), api("/v1/me/carbon/trades?limit=8")]);
+        const [pf, px, tr, dc] = await Promise.all([
+          api("/v1/me/carbon/portfolio"),
+          api("/v1/me/carbon/price"),
+          api("/v1/me/carbon/trades?limit=8"),
+          api("/v1/me/carbon/decision")
+        ]);
         const pos = pf.position || { tonnes: 0, debtSats: 0 };
         elCTonnes.textContent = Number(pos.tonnes || 0).toFixed(3);
         elCDebt.textContent = String(Number(pos.debtSats || 0));
         elCPrice.textContent = Number(pf.priceEurPerTonne || 0).toFixed(2);
+
+        const decision = dc.decision;
+        if (!decision) {
+          elSDPill.textContent = "—";
+          elSurplus.textContent = "—";
+          elBaseline.textContent = "—";
+          elActual.textContent = "—";
+        } else {
+          const s = Number(decision.surplusEur || 0);
+          const pill = s >= 0 ? "SURPLUS" : "DEFICIT";
+          elSDPill.textContent = pill;
+          elSDPill.className =
+            "rounded-full px-2 py-0.5 text-xs font-medium " +
+            (s >= 0
+              ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200"
+              : "bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-200");
+          elSurplus.textContent = (s >= 0 ? "+" : "−") + "€" + Math.abs(s).toFixed(3);
+          elBaseline.textContent = "€" + Number(decision.baselineCostEur || 0).toFixed(3);
+          elActual.textContent = "€" + Number(decision.actualCostEur || 0).toFixed(3);
+        }
 
         const pts = px.points || [];
         carbonChart.data.labels = pts.map((p) => p.ts);
@@ -284,9 +393,11 @@
       refreshSummary().catch(() => {});
       refreshChart().catch(() => {});
       refreshCarbon().catch(() => {});
+      refreshNotifs().catch(() => {});
       setInterval(() => refreshSummary().catch(() => {}), 1500);
       setInterval(() => refreshChart().catch(() => {}), 4000);
       setInterval(() => refreshCarbon().catch(() => {}), 2500);
+      setInterval(() => refreshNotifs().catch(() => {}), 3000);
     </script>
   </body>
 </html>

@@ -7,6 +7,9 @@ from .lightning_mock import MockLightning
 from .money import eur_to_sats
 from .store import ConsumptionEvent, LedgerEntry, Payment, Store, now_iso, nid
 from .tariff import compute_cost_eur
+from .budget import monthly_budget_snapshot
+from .carbon_agent import carbon_agent_step
+from .store import Notification
 
 
 def apply_latest_consumption(store: Store, provider_id: str, btc_eur_rate: float) -> float:
@@ -118,6 +121,33 @@ def wire_tick(store: Store, provider_id: str, btc_eur_rate: float, threshold_eur
 
     def _on_tick():
         apply_latest_consumption(store, provider_id, btc_eur_rate)
+        # Warmmiete budget model (default 73/27 split). For now use fallback values if user has no profile persisted.
+        warmmiete_eur = 1000.0
+        utilities_share = 0.27
+        snap = monthly_budget_snapshot(store, 1, warmmiete_eur=warmmiete_eur, utilities_share=utilities_share)
+
+        # Use budget-to-date as baseline for carbon agent; actual-to-date comes from ledger.
+        carbon_agent_step(
+            store,
+            user_id=1,
+            actual_cost_eur=snap.utilitiesActualToDateEur,
+            baseline_cost_eur=snap.utilitiesBudgetToDateEur,
+            btc_eur_rate=btc_eur_rate,
+        )
+
+        # Notify on deficit beyond small tolerance.
+        if snap.surplusEur < -0.10:
+            store.notifications.append(
+                Notification(
+                    id=nid("n_"),
+                    ts=now_iso(),
+                    userId=1,
+                    type="warning",
+                    title="Utility deficit vs Warmmiete prepayment",
+                    body=f"This month you are over your prepaid utilities by €{abs(snap.surplusEur):.2f}. Consider reducing usage or switching tariffs.",
+                    read=False,
+                )
+            )
         asyncio.create_task(maybe_settle(store, provider_id, 1, btc_eur_rate, threshold_eur, lightning))
 
     return _on_tick

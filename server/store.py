@@ -115,6 +115,28 @@ class CarbonPosition:
 
 
 @dataclass
+class CarbonDecision:
+    ts: str
+    userId: int
+    surplusEur: float
+    baselineCostEur: float
+    actualCostEur: float
+    carbonPriceEurPerTonne: float
+    actions: List[Dict]
+
+
+@dataclass
+class Notification:
+    id: str
+    ts: str
+    userId: int
+    type: Literal["warning", "info"]
+    title: str
+    body: str
+    read: bool = False
+
+
+@dataclass
 class Store:
     meters: List[Meter] = field(default_factory=list)
     tariffs: List[Tariff] = field(default_factory=list)
@@ -126,6 +148,8 @@ class Store:
     carbonPriceHistory: List[CarbonPricePoint] = field(default_factory=list)
     carbonTrades: List[CarbonTrade] = field(default_factory=list)
     carbonPositions: Dict[int, CarbonPosition] = field(default_factory=dict)
+    carbonDecisions: List[CarbonDecision] = field(default_factory=list)
+    notifications: List[Notification] = field(default_factory=list)
     unsettledEurByProviderId: Dict[str, float] = field(default_factory=dict)
 
     def as_json(self):

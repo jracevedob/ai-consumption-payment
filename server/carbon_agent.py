@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Dict
 
-from .store import CarbonPricePoint, CarbonTrade, Store, now_iso, nid
+from .store import CarbonDecision, CarbonPricePoint, CarbonTrade, Store, now_iso, nid
 from .money import eur_to_sats
 
 
@@ -61,6 +61,8 @@ def carbon_agent_step(
         "ts": now_iso(),
         "carbonPriceEurPerTonne": price,
         "surplusEur": surplus,
+        "baselineCostEur": float(baseline_cost_eur),
+        "actualCostEur": float(actual_cost_eur),
         "actions": [],
         "settlementCurrency": "sats",
     }
@@ -90,6 +92,17 @@ def carbon_agent_step(
             pos.tonnes = float(pos.tonnes + tonnes)
             pos.updatedAt = decision["ts"]
             decision["actions"].append({"type": "buy_credits", "tonnes": tonnes, "notionalSats": budget_sats})
+        store.carbonDecisions.append(
+            CarbonDecision(
+                ts=decision["ts"],
+                userId=user_id,
+                surplusEur=float(decision["surplusEur"]),
+                baselineCostEur=float(decision["baselineCostEur"]),
+                actualCostEur=float(decision["actualCostEur"]),
+                carbonPriceEurPerTonne=float(decision["carbonPriceEurPerTonne"]),
+                actions=list(decision["actions"]),
+            )
+        )
         return decision
 
     if surplus < 0:
@@ -126,7 +139,29 @@ def carbon_agent_step(
                 pos.updatedAt = decision["ts"]
                 decision["actions"].append({"type": "borrow_debt", "amountSats": borrow})
 
+        store.carbonDecisions.append(
+            CarbonDecision(
+                ts=decision["ts"],
+                userId=user_id,
+                surplusEur=float(decision["surplusEur"]),
+                baselineCostEur=float(decision["baselineCostEur"]),
+                actualCostEur=float(decision["actualCostEur"]),
+                carbonPriceEurPerTonne=float(decision["carbonPriceEurPerTonne"]),
+                actions=list(decision["actions"]),
+            )
+        )
         return decision
 
+    store.carbonDecisions.append(
+        CarbonDecision(
+            ts=decision["ts"],
+            userId=user_id,
+            surplusEur=float(decision["surplusEur"]),
+            baselineCostEur=float(decision["baselineCostEur"]),
+            actualCostEur=float(decision["actualCostEur"]),
+            carbonPriceEurPerTonne=float(decision["carbonPriceEurPerTonne"]),
+            actions=list(decision["actions"]),
+        )
+    )
     return decision
 

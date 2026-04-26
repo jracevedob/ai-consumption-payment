@@ -13,9 +13,20 @@ from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
 from .auth import CurrentUser, clear_session_cookie, hash_password, new_salt, new_session_id, session_expiry_iso, set_session_cookie
-from .db import connect, create_session, create_user, get_user_by_email, migrate
+from .db import (
+    connect,
+    create_notification,
+    create_session,
+    create_user,
+    get_user_by_email,
+    get_user_profile,
+    list_notifications,
+    migrate,
+    upsert_user_profile,
+)
 from .lightning_mock import MockLightning
 from .carbon_agent import current_carbon_price
+from .budget import monthly_budget_snapshot
 from .settlement import wire_tick
 from .simulate import simulation_loop
 from .store import ConsumptionEvent, Store, default_store, now_iso
@@ -160,6 +171,16 @@ async def register(payload: Dict[str, Any], response: Response):
     salt = new_salt()
     ph = hash_password(password, salt)
     user_id = create_user(con, email=email, password_hash=ph, salt=salt, created_at=now_iso())
+    # Default Warmmiete profile: user can update later.
+    upsert_user_profile(
+        con,
+        user_id=user_id,
+        warmmiete_eur=1000.0,
+        rent_share=0.73,
+        utilities_share=0.27,
+        created_at=now_iso(),
+        updated_at=now_iso(),
+    )
 
     sid = new_session_id()
     create_session(con, session_id=sid, user_id=user_id, expires_at=session_expiry_iso(), created_at=now_iso())
@@ -201,7 +222,62 @@ async def my_summary(user=CurrentUser):
         totals[le.resourceType] = float(totals.get(le.resourceType, 0.0) + (le.amountEur or 0.0))
 
     recent_payments = [p for p in store.payments if getattr(p, "userId", None) == uid][-20:]
-    return {"totalsEurByResource": totals, "recentPayments": recent_payments}
+
+    prof = get_user_profile(con, uid)
+    warmmiete = float(prof["warmmiete_eur"]) if prof else 1000.0
+    util_share = float(prof["utilities_share"]) if prof else 0.27
+    snap = monthly_budget_snapshot(store, uid, warmmiete_eur=warmmiete, utilities_share=util_share)
+
+    return {
+        "totalsEurByResource": totals,
+        "recentPayments": recent_payments,
+        "budget": snap,
+    }
+
+
+@app.get("/v1/me/profile")
+async def my_profile(user=CurrentUser):
+    uid = int(user["id"])
+    prof = get_user_profile(con, uid)
+    if not prof:
+        return {"warmmieteEur": 1000.0, "rentShare": 0.73, "utilitiesShare": 0.27}
+    return {
+        "warmmieteEur": float(prof["warmmiete_eur"]),
+        "rentShare": float(prof["rent_share"]),
+        "utilitiesShare": float(prof["utilities_share"]),
+        "updatedAt": str(prof["updated_at"]),
+    }
+
+
+@app.put("/v1/me/profile")
+async def update_profile(payload: Dict[str, Any], user=CurrentUser):
+    uid = int(user["id"])
+    warmmiete = float(payload.get("warmmieteEur", 1000.0))
+    rent_share = float(payload.get("rentShare", 0.73))
+    util_share = float(payload.get("utilitiesShare", 0.27))
+    if warmmiete <= 0:
+        raise HTTPException(status_code=400, detail="warmmieteEur must be positive")
+    if abs((rent_share + util_share) - 1.0) > 1e-6:
+        raise HTTPException(status_code=400, detail="rentShare + utilitiesShare must equal 1.0")
+    upsert_user_profile(
+        con,
+        user_id=uid,
+        warmmiete_eur=warmmiete,
+        rent_share=rent_share,
+        utilities_share=util_share,
+        created_at=now_iso(),
+        updated_at=now_iso(),
+    )
+    return {"ok": True}
+
+
+@app.get("/v1/me/notifications")
+async def my_notifications(limit: int = 20, user=CurrentUser):
+    uid = int(user["id"])
+    # Merge in-memory notifications (from runtime agent) + persisted ones.
+    mem = [n for n in store.notifications if n.userId == uid][-limit:]
+    persisted = list_notifications(con, uid, limit=limit)
+    return {"notifications": mem, "persisted": [dict(r) for r in persisted]}
 
 
 @app.get("/v1/me/tariffs/history")
@@ -235,6 +311,15 @@ async def my_carbon_trades(limit: int = 50, user=CurrentUser):
 async def my_carbon_price(limit: int = 200, user=CurrentUser):
     pts = store.carbonPriceHistory[-limit:]
     return {"points": pts}
+
+
+@app.get("/v1/me/carbon/decision")
+async def my_carbon_decision(user=CurrentUser):
+    uid = int(user["id"])
+    d = next((x for x in reversed(store.carbonDecisions) if x.userId == uid), None)
+    if d is None:
+        return {"decision": None}
+    return {"decision": d, "btcEurRate": BTC_EUR_RATE}
 
 
 @app.post("/v1/ingest")

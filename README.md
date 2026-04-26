@@ -22,6 +22,8 @@ This repo includes a **Python FastAPI** server that serves:
 - **Simulation**: meter events + auto-settlement loop (mock Lightning) on an interval
 - **Authentication**: user register/login with an httpOnly session cookie (SQLite-backed)
 - **User dashboard**: live spend + tariff price variation + carbon agent portfolio
+- **Warmmiete budget agent**: compares the user’s prepaid utilities budget (27% of Warmmiete, accrued to-date) vs actual consumption cost and shows **SURPLUS/DEFICIT**
+- **Notifications**: warns the user when they are exceeding the prepaid utilities budget
 
 ## Architecture
 
@@ -195,6 +197,27 @@ User endpoints:
 
 - **`GET /v1/me/summary`**: totals by resource + recent Lightning settlements
 - **`GET /v1/me/tariffs/history?resourceType=...`**: tariff history for the “price variation” chart
+- **`GET /v1/me/profile`**: Warmmiete settings (monthly EUR + 73/27 split)
+- **`PUT /v1/me/profile`**: update Warmmiete settings
+- **`GET /v1/me/notifications`**: in-app notifications (e.g. deficit warnings)
+
+### Warmmiete budget model (Germany)
+
+We model the common idea that monthly Warmmiete contains:
+
+- **73% rent** (fixed)
+- **27% utilities** (electricity/gas/water)
+
+The app computes a **utilities budget-to-date** within the current month:
+
+\[
+\text{utilitiesBudgetToDate} = \text{WarmmieteMonthly} \cdot 0.27 \cdot \frac{\text{dayOfMonth}}{\text{daysInMonth}}
+\]
+
+Then compares it to the **actual utilities cost-to-date** derived from the ledger (deterministic tariffing).
+
+- If **budget − actual > 0** → **SURPLUS** (eligible to invest via carbon agent)
+- If **budget − actual < 0** → **DEFICIT** (creates a warning notification)
 
 ### Carbon agent (sats-settled trading)
 
