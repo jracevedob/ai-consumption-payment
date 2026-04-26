@@ -136,7 +136,22 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          scales: { x: { display: false } },
+          scales: {
+            x: {
+              display: true,
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 6,
+                callback: function (value) {
+                  const label = this.getLabelForValue(value);
+                  const d = new Date(label);
+                  if (Number.isNaN(d.getTime())) return label;
+                  return d.toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+                }
+              },
+              grid: { display: false }
+            }
+          },
           plugins: { legend: { display: false } }
         }
       });
@@ -148,7 +163,22 @@
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          scales: { x: { display: false } },
+          scales: {
+            x: {
+              display: true,
+              ticks: {
+                autoSkip: true,
+                maxTicksLimit: 6,
+                callback: function (value) {
+                  const label = this.getLabelForValue(value);
+                  const d = new Date(label);
+                  if (Number.isNaN(d.getTime())) return label;
+                  return d.toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+                }
+              },
+              grid: { display: false }
+            }
+          },
           plugins: { legend: { display: false } }
         }
       });
