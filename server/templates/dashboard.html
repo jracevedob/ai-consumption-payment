@@ -175,13 +175,18 @@
       const elBaseline = document.getElementById("carbon-baseline");
       const elActual = document.getElementById("carbon-actual");
 
-      const ctx = document.getElementById("chart").getContext("2d");
+      const chartCanvas = document.getElementById("chart");
+      // Force canvas sizing to avoid “half-height” rendering in some browsers/layouts.
+      chartCanvas.style.width = "100%";
+      chartCanvas.style.height = "100%";
+      const ctx = chartCanvas.getContext("2d");
       const chart = new Chart(ctx, {
         type: "line",
         data: { labels: [], datasets: [{ label: "EUR per unit", data: [], borderWidth: 2, pointRadius: 0 }] },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          devicePixelRatio: 1,
           scales: {
             x: {
               display: true,
@@ -202,13 +207,17 @@
         }
       });
 
-      const carbonCtx = document.getElementById("carbonChart").getContext("2d");
+      const carbonCanvas = document.getElementById("carbonChart");
+      carbonCanvas.style.width = "100%";
+      carbonCanvas.style.height = "100%";
+      const carbonCtx = carbonCanvas.getContext("2d");
       const carbonChart = new Chart(carbonCtx, {
         type: "line",
         data: { labels: [], datasets: [{ label: "EUR/t", data: [], borderWidth: 2, pointRadius: 0 }] },
         options: {
           responsive: true,
           maintainAspectRatio: false,
+          devicePixelRatio: 1,
           scales: {
             x: {
               display: true,
@@ -227,6 +236,14 @@
           },
           plugins: { legend: { display: false } }
         }
+      });
+
+      // Ensure the charts pick up final layout dimensions.
+      queueMicrotask(() => {
+        try {
+          chart.resize();
+          carbonChart.resize();
+        } catch {}
       });
 
       function clear(el) {

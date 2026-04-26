@@ -31,18 +31,18 @@ This repo includes a **Python FastAPI** server that serves:
 
 ```mermaid
 flowchart LR
-  A[Smart meters / Meter gateway<br/>simulated] -->|consumption events| API[Backend API]
+  A[Smart meters / Meter gateway (simulated)] -->|consumption events| API[Backend API]
 
-  subgraph BACKEND[Backend API (FastAPI)]
+  subgraph BACKEND["Backend API (FastAPI)"]
     B1[Consumption store]
-    B2[Tariff engine<br/>EUR cost]
-    B3[Settlement policy<br/>threshold/time]
+    B2[Tariff engine (EUR cost)]
+    B3[Settlement policy (threshold/time)]
     B4[Ledger + payments log]
-    B5[Lightning client<br/>mock now, LND/CLN later]
+    B5[Lightning client (mock now, LND/CLN later)]
   end
 
-  API -->|JSON /v1/*| C[Frontend UI<br/>402index-like]
-  B5 -->|invoice + pay| D[Utility provider wallet/node<br/>mocked in MVP]
+  API -->|JSON /v1/*| C[Frontend UI (402index-like)]
+  B5 -->|invoice + pay| D[Utility provider wallet/node (mocked in MVP)]
   B4 -->|audit trail| C
 ```
 
