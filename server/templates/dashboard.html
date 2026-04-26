@@ -67,8 +67,8 @@
               <option value="cold_water">Cold water</option>
             </select>
           </div>
-          <div class="mt-4 h-72">
-            <canvas id="chart" style="height: 100%; width: 100%"></canvas>
+          <div class="mt-4 h-72 relative">
+            <canvas id="chart" class="block absolute inset-0 h-full w-full"></canvas>
           </div>
         </div>
 
@@ -90,8 +90,8 @@
             <div class="text-sm font-semibold">Carbon price (simulated)</div>
             <div class="text-xs text-zinc-500 dark:text-zinc-400">automatic buy/sell based on savings</div>
           </div>
-          <div class="mt-4 h-56">
-            <canvas id="carbonChart" style="height: 100%; width: 100%"></canvas>
+          <div class="mt-4 h-56 relative">
+            <canvas id="carbonChart" class="block absolute inset-0 h-full w-full"></canvas>
           </div>
           <div class="mt-4">
             <div class="text-xs font-semibold text-zinc-500 dark:text-zinc-400">Recent carbon trades</div>

@@ -20,6 +20,8 @@ This repo includes a **Python FastAPI** server that serves:
 - **Frontend**: `GET /` (HTML + Tailwind CDN + JS polling)
 - **Backend API**: `GET /v1/*` (meters, providers, stats, payments, ledger)
 - **Simulation**: meter events + auto-settlement loop (mock Lightning) on an interval
+- **Authentication**: user register/login with an httpOnly session cookie (SQLite-backed)
+- **User dashboard**: live spend + tariff price variation + carbon agent portfolio
 
 ## Architecture
 
@@ -174,6 +176,40 @@ Base path: `/v1`
 - **`GET /v1/ledger?limit=200`**: audit ledger entries
 - **`GET /v1/payments?limit=200`**: payment history (mock Lightning)
 - **`POST /v1/ingest`**: ingest a consumption event
+
+### Auth & dashboard
+
+Pages:
+
+- **`GET /login`**: login/register page
+- **`GET /dashboard`**: authenticated dashboard (live spend + charts)
+
+Auth endpoints:
+
+- **`POST /auth/register`**: `{ email, password }` → sets `acp_session` cookie
+- **`POST /auth/login`**: `{ email, password }` → sets `acp_session` cookie
+- **`POST /auth/logout`**: clears cookie
+- **`GET /v1/me`**: returns current user (requires cookie)
+
+User endpoints:
+
+- **`GET /v1/me/summary`**: totals by resource + recent Lightning settlements
+- **`GET /v1/me/tariffs/history?resourceType=...`**: tariff history for the “price variation” chart
+
+### Carbon agent (sats-settled trading)
+
+This is a demo “agent policy” that reacts to **savings vs a baseline**:
+
+- **If consumption is lower than baseline (surplus)**: invest part of the surplus into **buying carbon credits**
+- **If consumption is higher than baseline (deficit)**: **sell credits** first; if still short, take a capped **debt**
+
+Important: **trades are settled in Bitcoin (sats)**. Carbon prices are still displayed in **EUR/tonne** for readability.
+
+Endpoints (requires auth):
+
+- **`GET /v1/me/carbon/portfolio`**: carbon position (tonnes), debt (**sats**), and current carbon price
+- **`GET /v1/me/carbon/trades?limit=...`**: recent carbon trades (each includes `notionalSats`)
+- **`GET /v1/me/carbon/price?limit=...`**: carbon price series (EUR/tonne) for charting
 
 Example:
 
