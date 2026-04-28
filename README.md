@@ -254,5 +254,4 @@ The code is structured so the Lightning client can be swapped without changing t
 
 ## Notes
 
-- The `apps/*` Node scaffold is optional; your Cursor environment currently doesn’t include npm/pnpm, so the Python server is the working full-stack path.
-
+- The `apps/*` Node scaffold is optional
